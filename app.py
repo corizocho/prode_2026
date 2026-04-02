@@ -61,4 +61,4 @@ try:
                         st.success("¡Golazo! Se guardaron todos los resultados correctamente.")
                         st.balloons()
                     else:
-                        st.error(
+                        st.error()
