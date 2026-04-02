@@ -1,37 +1,67 @@
 import streamlit as st
 import pandas as pd
+import requests
 
-st.set_page_config(page_title="Prode Mundial 2026", page_icon="⚽")
-st.title("🏆 Prode Amigos 2026")
+# --- CONFIGURACIÓN ---
+SHEET_ID = "1BACdwjatwM85mpPkSAOXY8l3IP-MecfjgYqa7USZw10"
+# Link de envío del formulario
+FORM_URL = "https://docs.google.com/forms/d/e/1FAIpQLSe-N62t_1nQAK08u0Orr23Zk5fu69vo34chTa229CCiQx5mQA/formResponse"
 
-# TU LINK DE GOOGLE SHEETS (Versión Exportar)
-sheet_id = "1BACdwjatwM85mpPkSAOXY8l3IP-MecfjgYqa7USZw10"
-url_partidos = f"https://docs.google.com/spreadsheets/d/{sheet_id}/gviz/tq?tqx=out:csv&sheet=Partidos"
+st.set_page_config(page_title="Prode 2026", page_icon="⚽")
+st.title("🏆 Mi Prode 2026")
+
+# Función para mandar datos al Google Form de forma invisible
+def enviar_a_google(user, id_p, g_l, g_v):
+    datos = {
+        "entry.331238612": user,       # Usuario
+        "entry.1706692557": id_p,      # ID Partido
+        "entry.1741549419": g_l,       # Goles Local
+        "entry.1351187424": g_v        # Goles Visitante
+    }
+    try:
+        requests.post(FORM_URL, data=datos)
+    except:
+        pass
+
+# --- CARGA DE DATOS ---
+url_partidos = f"https://docs.google.com/spreadsheets/d/{SHEET_ID}/gviz/tq?tqx=out:csv&sheet=Partidos"
 
 try:
-    # Leemos los datos directamente
     df_partidos = pd.read_csv(url_partidos)
     
-    st.success("¡Conectado con éxito!")
-    
-    # Menú lateral para elegir usuario
-    nombres_amigos = ["Juan", "Pedro", "Maria", "Corizocho"] # Después lo levantamos del Sheet
-    usuario = st.sidebar.selectbox("¿Quién sos?", ["Seleccionar..."] + nombres_amigos)
+    # Login en el lateral
+    nombres = ["Juan", "Pedro", "Maria", "Corizocho", "Invitado"] 
+    usuario = st.sidebar.selectbox("¿Quién sos?", ["Seleccionar..."] + nombres)
 
     if usuario != "Seleccionar...":
-        st.subheader(f"Hola {usuario}, cargá tus pronósticos:")
+        st.header(f"Hola {usuario}, cargá tus resultados:")
         
-        # Mostramos solo los primeros 3 partidos de prueba
-        for index, row in df_partidos.head(3).iterrows():
-            col1, col2, col3 = st.columns([2,1,2])
-            with col1: st.write(row['equipo_local'])
-            with col2: st.number_input("Goles", min_value=0, key=f"l_{index}", label_visibility="collapsed")
-            with col3: st.write(row['equipo_visitante'])
-            
-        if st.button("Guardar todo"):
-            st.balloons()
-            st.warning("Para guardar de verdad, necesitamos un paso final de escritura, ¡pero la app ya funciona!")
+        # Diccionario para guardar lo que escribe el usuario antes de apretar el botón
+        resultados_temp = {}
+
+        # Mostramos los partidos (filtramos los que no tienen resultado real)
+        partidos_vivos = df_partidos[df_partidos['goles_local_real'].isna()]
+
+        for index, row in partidos_vivos.iterrows():
+            with st.container():
+                col1, col2, col3, col4, col5 = st.columns([2, 1, 0.5, 1, 2])
+                with col1: st.write(f"**{row['equipo_local']}**")
+                with col2: res_l = st.number_input("L", min_value=0, step=1, key=f"l_{row['id']}", label_visibility="collapsed")
+                with col3: st.write("-")
+                with col4: res_v = st.number_input("V", min_value=0, step=1, key=f"v_{row['id']}", label_visibility="collapsed")
+                with col5: st.write(f"**{row['equipo_visitante']}**")
+                
+                # Guardamos en memoria temporal
+                resultados_temp[row['id']] = (res_l, res_v)
+            st.write("---")
+
+        if st.button("🚀 GUARDAR TODO EN EL EXCEL"):
+            with st.spinner('Guardando tus pronósticos...'):
+                for id_p, (gl, gv) in resultados_temp.items():
+                    enviar_a_google(usuario, id_p, gl, gv)
+                
+                st.success("¡Listo! Tus resultados ya están en el Excel.")
+                st.balloons()
 
 except Exception as e:
-    st.error("Error al leer el Sheet. Asegurate de que el Sheet esté 'Público' (Cualquier persona con el enlace puede ver).")
-    st.info(f"Detalle técnico: {e}")
+    st.error("Error de conexión. Asegurate de que el Sheet esté Público.")
