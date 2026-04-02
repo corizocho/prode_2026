@@ -1,30 +1,37 @@
 import streamlit as st
-from st_gsheets_connection import GSheetsConnection
+import pandas as pd
 
-# Configuración básica
 st.set_page_config(page_title="Prode Mundial 2026", page_icon="⚽")
 st.title("🏆 Prode Amigos 2026")
 
-# Intentar conectar al Google Sheet
+# TU LINK DE GOOGLE SHEETS (Versión Exportar)
+sheet_id = "1BACdwjatwM85mpPkSAOXY8l3IP-MecfjgYqa7USZw10"
+url_partidos = f"https://docs.google.com/spreadsheets/d/{sheet_id}/gviz/tq?tqx=out:csv&sheet=Partidos"
+
 try:
-    conn = st.connection("gsheets", type=GSheetsConnection)
-    st.success("¡Conectado al Prode!")
+    # Leemos los datos directamente
+    df_partidos = pd.read_csv(url_partidos)
     
-    # Aquí es donde el usuario elegiría su nombre
-    usuario = st.sidebar.selectbox("¿Quién sos?", ["Elegir...", "Juan", "Pedro", "Maria"])
+    st.success("¡Conectado con éxito!")
     
-    if usuario != "Elegir...":
-        st.write(f"Bienvenido, **{usuario}**. Cargá tus resultados:")
-        # Ejemplo visual de partido
-        col1, col2, col3 = st.columns([2,1,2])
-        with col1: st.write("🇲🇽 México")
-        with col2: st.number_input("", min_value=0, max_value=20, key="m1", label_visibility="collapsed")
-        with col3: st.write("🇵🇱 Polonia")
+    # Menú lateral para elegir usuario
+    nombres_amigos = ["Juan", "Pedro", "Maria", "Corizocho"] # Después lo levantamos del Sheet
+    usuario = st.sidebar.selectbox("¿Quién sos?", ["Seleccionar..."] + nombres_amigos)
+
+    if usuario != "Seleccionar...":
+        st.subheader(f"Hola {usuario}, cargá tus pronósticos:")
         
-        if st.button("Guardar Predicción"):
+        # Mostramos solo los primeros 3 partidos de prueba
+        for index, row in df_partidos.head(3).iterrows():
+            col1, col2, col3 = st.columns([2,1,2])
+            with col1: st.write(row['equipo_local'])
+            with col2: st.number_input("Goles", min_value=0, key=f"l_{index}", label_visibility="collapsed")
+            with col3: st.write(row['equipo_visitante'])
+            
+        if st.button("Guardar todo"):
             st.balloons()
-            st.info("Predicción enviada (simulación)")
+            st.warning("Para guardar de verdad, necesitamos un paso final de escritura, ¡pero la app ya funciona!")
 
 except Exception as e:
-    st.error("Falta configurar la conexión al Sheet en Streamlit Cloud.")
-    st.info("Una vez que la app cargue, pasame el link de tu Google Sheet y te digo dónde pegar el ID.")
+    st.error("Error al leer el Sheet. Asegurate de que el Sheet esté 'Público' (Cualquier persona con el enlace puede ver).")
+    st.info(f"Detalle técnico: {e}")
