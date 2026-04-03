@@ -1,65 +1,76 @@
 import streamlit as st
 import pandas as pd
+import gspread
+from google.oauth2.service_account import Credentials
 
-# --- CONFIGURACIÓN DE PÁGINA ---
+# --- CONFIGURACIÓN ---
 st.set_page_config(page_title="Prode Mundial 2026", layout="centered")
 
-# --- REEMPLAZÁ ESTOS LINKS CON LOS QUE GENERASTE EN "PUBLICAR EN LA WEB" ---
-LINK_CSV_PARTIDOS = "https://docs.google.com/spreadsheets/d/e/2PACX-1vR8qz-i8ZF0m9eiH-jPXh7Lv1nvGmjK1a9dFY00U2sdHz7IRux9JPJHNmW-FLsiLOBDJlM9ab2gqvtq/pub?gid=0&single=true&output=csv"
-LINK_CSV_RANKING = "https://docs.google.com/spreadsheets/d/e/2PACX-1vR8qz-i8ZF0m9eiH-jPXh7Lv1nvGmjK1a9dFY00U2sdHz7IRux9JPJHNmW-FLsiLOBDJlM9ab2gqvtq/pub?gid=883227529&single=true&output=csv"
+ID_SHEET = "1BACdwjatwM8mpPkSAOXY8I3IP-MecfjgYqa7OSZw10"
 
-st.title("🏆 PRODE MUNDIAL 2026")
-
-# Creamos las pestañas visuales
-tab1, tab2 = st.tabs(["⚽ Cargar Pronóstico", "📊 Tabla de Posiciones"])
-
-with tab1:
-    st.header("Tu Jugada")
+def conectar():
     try:
-        # Leemos los datos directamente del link público
-        df_p = pd.read_csv(LINK_CSV_PARTIDOS)
+        s = st.secrets["gcp_service_account"]
+        # Limpieza de la llave
+        pk = s["private_key"].replace("\\n", "\n").strip()
         
-        # Limpiamos posibles espacios en los nombres de las columnas
-        df_p.columns = df_p.columns.str.strip()
+        info = {
+            "type": s["type"], "project_id": s["project_id"],
+            "private_key_id": s["private_key_id"], "private_key": pk,
+            "client_email": s["client_email"], "client_id": s["client_id"],
+            "auth_uri": s["auth_uri"], "token_uri": s["token_uri"],
+            "auth_provider_x509_cert_url": s["auth_provider_x509_cert_url"],
+            "client_x509_cert_url": s["client_x509_cert_url"]
+        }
         
-        nombre = st.text_input("Tu Nombre:", placeholder="Escribí quién sos")
+        scopes = ["https://www.googleapis.com/auth/spreadsheets", "https://www.googleapis.com/auth/drive"]
+        creds = Credentials.from_service_account_info(info, scopes=scopes)
+        return gspread.authorize(creds)
+    except Exception as e:
+        st.error(f"Error de configuración: {e}")
+        return None
+
+client = conectar()
+
+if client:
+    try:
+        sheet = client.open_by_key(ID_SHEET)
+        st.title("🏆 PRODE MUNDIAL 2026")
         
-        # Armamos la lista de partidos combinando local y visitante
-        # Asegurate que las columnas en el Excel se llamen exactamente 'equipo_local' y 'equipo_visitante'
-        opciones_partidos = df_p['equipo_local'] + " vs " + df_p['equipo_visitante']
-        seleccion = st.selectbox("Elegí el partido que querés pronosticar:", opciones_partidos)
-        
-        st.divider()
-        
-        # Mensaje de ayuda mientras resolvemos la escritura automática
-        st.info("💡 Por ahora, para que tus goles se sumen, anotalos directamente en la planilla.")
-        st.link_button("👉 Abrir Excel para anotar goles", "https://docs.google.com/spreadsheets/d/1BACdwjatwM8mpPkSAOXY8l3IP-MecfjgYqa7USZw10/edit")
+        t1, t2 = st.tabs(["⚽ Pronósticos", "📊 Posiciones"])
+
+        with t1:
+            ws_p = sheet.worksheet("Partidos")
+            df_p = pd.DataFrame(ws_p.get_all_records())
+            
+            nombre = st.text_input("Tu Nombre:")
+            opciones = df_p['equipo_local'] + " vs " + df_p['equipo_visitante']
+            sel = st.selectbox("Elegí el partido:", opciones)
+            
+            # Buscamos el ID del partido seleccionado
+            id_partido = df_p.iloc[opciones.tolist().index(sel)]['id']
+            
+            col1, col2 = st.columns(2)
+            g_l = col1.number_input("Goles Local", min_value=0, step=1, key="l")
+            g_v = col2.number_input("Goles Vis", min_value=0, step=1, key="v")
+            
+            if st.button("Guardar Pronóstico"):
+                if nombre:
+                    ws_res = sheet.worksheet("Respuestas de formulario 1")
+                    # Guardamos directo en el Excel sin salir de la app
+                    ws_res.append_row([pd.Timestamp.now().strftime('%d/%m/%Y %H:%M'), nombre, id_partido, g_l, g_v])
+                    st.success(f"¡Listo {nombre}! Pronóstico guardado.")
+                    st.balloons()
+                else:
+                    st.warning("Poné tu nombre para participar.")
+
+        with t2:
+            ws_r = sheet.worksheet("CalculoPuntos")
+            df_r = pd.DataFrame(ws_r.get_all_records())
+            if not df_r.empty:
+                ranking = df_r.groupby("Usuario")["Puntos"].sum().reset_index()
+                st.table(ranking.sort_values("Puntos", ascending=False))
 
     except Exception as e:
-        st.error("No se pudo conectar con la lista de partidos.")
-        st.write(f"Detalle del error: {e}")
-
-with tab2:
-    st.header("🏆 Posiciones Actualizadas")
-    try:
-        # Leemos la hoja de ranking
-        df_r = pd.read_csv(LINK_CSV_RANKING)
-        df_r.columns = df_r.columns.str.strip()
-        
-        if not df_r.empty:
-            # Agrupamos por usuario y sumamos los puntos
-            # Asegurate que las columnas se llamen 'Usuario' y 'Puntos'
-            ranking = df_r.groupby("Usuario")["Puntos"].sum().reset_index()
-            ranking = ranking.sort_values(by="Puntos", ascending=False).reset_index(drop=True)
-            
-            # Mostramos la tabla linda
-            st.table(ranking)
-        else:
-            st.warning("Todavía no hay puntos cargados en la hoja 'CalculoPuntos'.")
-            
-    except Exception as e:
-        st.error("No se pudo cargar la tabla de posiciones.")
-        st.write(f"Detalle del error: {e}")
-
-# Pie de página
-st.caption("Prode Mundial 2026 - Actualización automática vía Google Sheets")
+        st.error(f"Falla de red con Google: {e}")
+        st.info("Reintentá en unos segundos o hacé un 'Reboot App'.")
