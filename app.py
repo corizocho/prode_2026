@@ -1,59 +1,62 @@
 import streamlit as st
 import pandas as pd
+import gspread
+from oauth2client.service_account import ServiceAccountCredentials
 
-# 1. PEGA ACÁ LA URL DE TU EXCEL (La que ves en el navegador)
-URL_EXCEL = "https://docs.google.com/spreadsheets/d/1BACdwjatWM8mpPKSAOXY8I3IP-MecfJgyqa7OSZWTO/edit""
+# --- CONFIGURACIÓN DE SEGURIDAD ---
+# Esto lee la "llave" que vamos a pegar en Secrets
+scope = ["https://spreadsheets.google.com/feeds", "https://www.googleapis.com/auth/drive"]
 
-# Función para convertir la URL normal en una de descarga de datos
-def obtener_url_csv(sheet_id, sheet_name):
-    # Esta es la forma infalible de pedir una pestaña específica como CSV
-    return f"https://docs.google.com/spreadsheets/d/{sheet_id}/gspread/tq?tqx=out:csv&sheet={sheet_name}"
+def conectar_google():
+    creds_dict = st.secrets["gcp_service_account"]
+    creds = ServiceAccountCredentials.from_json_keyfile_dict(creds_dict, scope)
+    return gspread.authorize(creds)
 
-# Y cuando llames a los datos, usalo así:
+# --- INTERFAZ ---
+st.title("🏆 PRODE MUNDIAL 2026")
+
 ID_SHEET = "1BACdwjatWM8mpPKSAOXY8I3IP-MecfJgyqa7OSZWTO"
 
 try:
-    df_partidos = pd.read_csv(obtener_url_csv(ID_SHEET, "Partidos"))
-    # ... resto del código ...
-except Exception as e:
-    st.error(f"Error al leer: {e}")
-
-st.title("🏆 PRODE MUNDIAL 2026")
-
-tab1, tab2 = st.tabs(["⚽ Cargar Goles", "📊 Posiciones"])
-
-with tab1:
-    st.header("Cargá tu pronóstico")
-    usuario = st.text_input("Tu Nombre:")
+    client = conectar_google()
+    sheet = client.open_by_key(ID_SHEET)
     
-    # Leemos los partidos directamente de la URL pública
-    try:
-        df_partidos = pd.read_csv(obtener_url_csv("Partidos"))
-        lista = df_partidos['equipo_local'] + " vs " + df_partidos['equipo_visitante']
-        partido = st.selectbox("Partido:", lista)
+    tab1, tab2 = st.tabs(["⚽ Cargar Goles", "📊 Posiciones"])
+
+    with tab1:
+        st.header("Cargá tu pronóstico")
+        usuario = st.text_input("Tu Nombre:")
         
-        # Goles
+        # Leer Partidos
+        ws_partidos = sheet.worksheet("Partidos")
+        df_partidos = pd.DataFrame(ws_partidos.get_all_records())
+        
+        lista = df_partidos['equipo_local'] + " vs " + df_partidos['equipo_visitante']
+        partido_sel = st.selectbox("Partido:", lista)
+        idx = lista.tolist().index(partido_sel)
+        id_p = df_partidos.iloc[idx]['id']
+
         c1, c2 = st.columns(2)
         g_l = c1.number_input("Goles Local", min_value=0, step=1)
         g_v = c2.number_input("Goles Visitante", min_value=0, step=1)
 
         if st.button("Enviar Pronóstico"):
-            st.warning("⚠️ Para guardar, hacé clic en el link de abajo y pegá los datos (es la forma más simple sin errores de seguridad)")
-            # Esto genera un link que le manda los datos al Excel si usas un Formulario, 
-            # pero por ahora, para no marearte, vamos a ver si lee el Ranking.
-            st.write(f"Voto de {usuario}: {partido} -> {g_l}-{g_v}")
-    except:
-        st.error("No se pudo leer el Excel. Revisá que sea 'Público'.")
+            if usuario:
+                ws_res = sheet.worksheet("Respuestas de formulario 1")
+                ws_res.append_row([pd.Timestamp.now().strftime('%Y-%m-%d %H:%M:%S'), usuario, id_p, g_l, g_v])
+                st.success("✅ ¡Pronóstico guardado automáticamente!")
+            else:
+                st.error("Poné tu nombre.")
 
-with tab2:
-    st.header("🏆 Tabla de Posiciones")
-    try:
-        # Leemos la pestaña de cálculos
-        df_ranking = pd.read_csv(obtener_url_csv("CalculoPuntos"))
-        # Sumamos los puntos
-        resumen = df_ranking.groupby("Usuario")["Puntos"].sum().reset_index()
-        resumen = resumen.sort_values(by="Puntos", ascending=False)
+    with tab2:
+        st.header("🏆 Tabla de Posiciones")
+        ws_puntos = sheet.worksheet("CalculoPuntos")
+        df_puntos = pd.DataFrame(ws_puntos.get_all_records())
         
-        st.table(resumen)
-    except:
-        st.info("Todavía no hay puntos cargados.")
+        if not df_puntos.empty:
+            resumen = df_puntos.groupby("Usuario")["Puntos"].sum().reset_index()
+            resumen = resumen.sort_values(by="Puntos", ascending=False).reset_index(drop=True)
+            st.table(resumen)
+
+except Exception as e:
+    st.error(f"Falta configurar la llave en Secrets: {e}")
