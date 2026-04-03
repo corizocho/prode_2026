@@ -3,78 +3,64 @@ import pandas as pd
 import gspread
 from oauth2client.service_account import ServiceAccountCredentials
 
-# --- CONFIGURACIÓN DE LA PÁGINA ---
+# --- CONFIGURACIÓN ---
 st.set_page_config(page_title="Prode Mundial 2026", layout="centered")
-
-# --- CONEXIÓN CON GOOGLE SHEETS ---
-# EL ID TIENE QUE IR ENTRE COMILLAS SÍ O SÍ
 ID_SHEET = "1BACdwjatWM8mpPKSAOXY8I3IP-MecfJgyqa7OSZWTO"
 
 def conectar_google():
     try:
-        # Lee los Secrets que pegaste en el panel de Streamlit
-        creds_dict = st.secrets["gcp_service_account"]
+        # Esto busca la sección [gcp_service_account] en tus Secrets
+        info_llave = st.secrets["gcp_service_account"]
         scope = ["https://spreadsheets.google.com/feeds", "https://www.googleapis.com/auth/drive"]
-        creds = ServiceAccountCredentials.from_json_keyfile_dict(creds_dict, scope)
+        creds = ServiceAccountCredentials.from_json_keyfile_dict(info_llave, scope)
         return gspread.authorize(creds)
     except Exception as e:
-        st.error("Error en Secrets: Revisá que la llave JSON esté bien pegada.")
+        st.error(f"Error en los Secrets: {e}")
         st.stop()
 
-# --- INICIO DE LA APP ---
+# --- APP ---
 try:
     client = conectar_google()
     spreadsheet = client.open_by_key(ID_SHEET)
     
     st.title("🏆 PRODE MUNDIAL 2026")
+    t1, t2 = st.tabs(["⚽ Cargar Goles", "📊 Posiciones"])
 
-    tab1, tab2 = st.tabs(["⚽ Cargar Goles", "📊 Tabla de Posiciones"])
-
-    with tab1:
+    with t1:
         st.header("Cargá tu pronóstico")
-        usuario = st.text_input("Tu Nombre (como figura en el Prode):")
+        nombre = st.text_input("Tu Nombre:")
         
-        # Leemos los partidos
-        ws_partidos = spreadsheet.worksheet("Partidos")
-        df_partidos = pd.DataFrame(ws_partidos.get_all_records())
+        ws_p = spreadsheet.worksheet("Partidos")
+        df_p = pd.DataFrame(ws_p.get_all_records())
         
-        lista = df_partidos['equipo_local'] + " vs " + df_partidos['equipo_visitante']
-        partido_sel = st.selectbox("Seleccioná el partido:", lista)
-        
-        idx = lista.tolist().index(partido_sel)
-        id_p = df_partidos.iloc[idx]['id']
+        opciones = df_p['equipo_local'] + " vs " + df_p['equipo_visitante']
+        sel = st.selectbox("Partido:", opciones)
+        id_partido = df_p.iloc[opciones.tolist().index(sel)]['id']
         
         c1, c2 = st.columns(2)
-        g_l = c1.number_input("Goles Local", min_value=0, step=1, key="gl")
-        g_v = c2.number_input("Goles Visitante", min_value=0, step=1, key="gv")
+        g_l = c1.number_input("Goles Local", min_value=0, step=1, key="l")
+        g_v = c2.number_input("Goles Vis", min_value=0, step=1, key="v")
         
-        if st.button("Enviar Pronóstico"):
-            if usuario:
+        if st.button("Enviar"):
+            if nombre:
                 ws_res = spreadsheet.worksheet("Respuestas de formulario 1")
-                ahora = pd.Timestamp.now().strftime('%d/%m/%Y %H:%M:%S')
-                ws_res.append_row([ahora, usuario, id_p, g_l, g_v])
-                st.success(f"✅ ¡Cargado {usuario}! Ya se ve en el Excel.")
+                ws_res.append_row([pd.Timestamp.now().strftime('%d/%m/%Y %H:%M'), nombre, id_partido, g_l, g_v])
+                st.success("✅ ¡Guardado!")
                 st.balloons()
             else:
-                st.warning("Poné tu nombre primero.")
+                st.warning("Poné tu nombre.")
 
-    with tab2:
+    with t2:
         st.header("🏆 Posiciones")
         try:
-            ws_puntos = spreadsheet.worksheet("CalculoPuntos")
-            df_p = pd.DataFrame(ws_puntos.get_all_records())
-            
-            if not df_p.empty:
-                # Agrupamos por usuario y sumamos puntos
-                ranking = df_p.groupby("Usuario")["Puntos"].sum().reset_index()
-                ranking = ranking.sort_values(by="Puntos", ascending=False).reset_index(drop=True)
-                st.table(ranking)
-            else:
-                st.info("Todavía no hay puntos procesados.")
+            ws_rank = spreadsheet.worksheet("CalculoPuntos")
+            df_r = pd.DataFrame(ws_rank.get_all_records())
+            df_r = df_r.dropna(subset=['Usuario', 'Puntos'])
+            res = df_r.groupby("Usuario")["Puntos"].sum().reset_index()
+            st.table(res.sort_values("Puntos", ascending=False))
         except:
-            st.write("Cargando ranking...")
+            st.info("No hay puntos cargados aún.")
 
 except Exception as e:
-    st.error("Fallo la conexión con el Excel.")
-    st.write(f"Error técnico: {e}")
-    st.info("💡 Recordá: Compartí el Excel con el mail de tu JSON como 'Editor'.")
+    st.error("Error de conexión con Google.")
+    st.info("Revisá que el mail de tu JSON sea Editor en el Excel.")
