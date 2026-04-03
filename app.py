@@ -18,22 +18,24 @@ t1, t2 = st.tabs(["⚽ Pronósticos", "📊 Posiciones"])
 with t1:
     st.header("Cargá tu jugada")
     try:
-        # Usamos pandas para leer la URL pública
+        # Leemos los partidos
         df_p = pd.read_csv(URL_PARTIDOS)
         
-        if not df_p.empty:
-            nombre = st.text_input("Tu Nombre:")
-            # Verificá que las columnas se llamen exactamente así en tu Excel
-            opciones = df_p['equipo_local'] + " vs " + df_p['equipo_visitante']
-            sel = st.selectbox("Elegí el partido:", opciones)
-            
-            st.info("💡 Para anotar los goles, hacelo en el Excel mientras terminamos de conectar el botón.")
-            st.markdown(f"[👉 Abrir planilla para anotar](https://docs.google.com/spreadsheets/d/{ID_SHEET}/edit)")
-        else:
-            st.warning("La hoja 'Partidos' parece estar vacía.")
+        # Limpieza rápida por si Google mete columnas vacías
+        df_p = df_p.dropna(subset=['equipo_local', 'equipo_visitante'])
+        
+        nombre = st.text_input("Tu Nombre:", placeholder="Escribí tu nombre acá")
+        
+        opciones = df_p['equipo_local'] + " vs " + df_p['equipo_visitante']
+        sel = st.selectbox("Elegí el partido:", opciones)
+        
+        st.divider()
+        st.info("🎯 Para anotar tus goles, hacelo directamente en el Excel mientras terminamos la conexión del botón.")
+        st.link_button("Ir al Excel para anotar", f"https://docs.google.com/spreadsheets/d/{ID_SHEET}/edit")
+
     except Exception as e:
-        st.error("No se pudo conectar con la hoja de Partidos.")
-        st.write(f"Error técnico: {e}")
+        st.error("No se pudo cargar la lista de partidos.")
+        st.write("Verificá que la pestaña del Excel se llame exactamente 'Partidos'")
 
 with t2:
     st.header("🏆 Tabla de Posiciones")
