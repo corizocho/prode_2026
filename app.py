@@ -4,10 +4,12 @@ import pandas as pd
 # --- CONFIGURACIÓN ---
 st.set_page_config(page_title="Prode Mundial 2026", layout="centered")
 
-# Este es el link de tu Excel público transformado para que Python lo lea directo
+# --- CONFIGURACIÓN ---
 ID_SHEET = "1BACdwjatwM8mpPkSAOXY8I3IP-MecfjgYqa7OSZw10"
-URL_PARTIDOS = f"https://docs.google.com/spreadsheets/d/{ID_SHEET}/gviz/tq?tqx=out:csv&sheet=Partidos"
-URL_RANKING = f"https://docs.google.com/spreadsheets/d/{ID_SHEET}/gviz/tq?tqx=out:csv&sheet=CalculoPuntos"
+
+# Estas URLs son "mágicas": fuerzan a Google a darte los datos sin pedir llaves
+URL_PARTIDOS = f"https://docs.google.com/spreadsheets/d/{ID_SHEET}/export?format=csv&gid=0"
+URL_RANKING = f"https://docs.google.com/spreadsheets/d/{ID_SHEET}/export?format=csv&gid=883227529"
 
 st.title("🏆 PRODE MUNDIAL 2026")
 
