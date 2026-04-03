@@ -1,57 +1,87 @@
 import streamlit as st
 import pandas as pd
-import requests
-import json
+from gspread_streamlit import get_gspread_client
 
-# --- CONFIGURACIÓN ---
-SHEET_ID = "1BACdwjatwM85mpPkSAOXY8l3IP-MecfjgYqa7USZw10"
-SCRIPT_URL = "https://script.google.com/macros/s/AKfycbxilAcoq93UZ7ahSxK5u2E20iCwKQ7umBtRBa4Q86oKq4_upzlMNFrTIZCO9xGDmcGvYA/exec"
+# --- CONFIGURACIÓN INICIAL ---
+# Reemplazá esto con el ID de tu Google Sheet (está en la URL de tu navegador)
+SHEET_ID = "https://docs.google.com/spreadsheets/d/1BACdwjatwM85mpPkSAOXY8l3IP-MecfjgYqa7USZw10/edit?gid=883227529#gid=883227529"
 
-st.set_page_config(page_title="Prode 2026", page_icon="⚽", layout="wide")
-st.title("🏆 Mi Prode Amigos 2026")
+st.set_page_config(page_title="Prode Mundial 2026", layout="centered")
 
-# --- CARGA DE DATOS ---
-url_partidos = f"https://docs.google.com/spreadsheets/d/{SHEET_ID}/gviz/tq?tqx=out:csv&sheet=Partidos"
+# Conexión con Google Sheets
+client = get_gspread_client()
+spreadsheet = client.open_by_key(SHEET_ID)
 
-try:
-    df_partidos = pd.read_csv(url_partidos)
-    nombres = ["Juan", "Pedro", "Maria", "Corizocho", "nicolas", "edu"] 
-    usuario = st.sidebar.selectbox("¿Quién sos?", ["Seleccionar..."] + nombres)
+# --- FUNCIÓN PARA GUARDAR DATOS ---
+def guardar_pronostico(usuario, id_partido, goles_l, goles_v):
+    try:
+        # IMPORTANTE: El nombre de la pestaña debe ser igual al del Excel
+        sheet = spreadsheet.worksheet("Respuestas de formulario 1")
+        # Guardamos: Usuario, ID Partido, Goles Local, Goles Visitante
+        sheet.append_row([usuario, id_partido, goles_l, goles_v])
+        return True
+    except Exception as e:
+        st.error(f"Error al guardar: {e}")
+        return False
 
-    if usuario != "Seleccionar...":
-        st.header(f"Fixture para {usuario}")
+# --- INTERFAZ DE USUARIO ---
+st.title("🏆 PRODE MUNDIAL 2026")
+
+# Creamos las pestañas para organizar la app
+tab_prode, tab_ranking = st.tabs(["⚽ Cargar Goles", "📊 Tabla de Posiciones"])
+
+# --- PESTAÑA 1: CARGA DE DATOS ---
+with tab_prode:
+    st.header("Cargá tu pronóstico")
+    
+    usuario = st.text_input("Ingresá tu nombre (como figura en el Prode):")
+    
+    # Traemos los partidos de la pestaña 'Partidos' para el selector
+    url_partidos = f"https://docs.google.com/spreadsheets/d/{SHEET_ID}/gviz/tq?tqx=out:csv&sheet=Partidos"
+    try:
+        df_partidos = pd.read_csv(url_partidos)
+        lista_nombres = df_partidos['equipo_local'] + " vs " + df_partidos['equipo_visitante']
         
-        pronosticos_lista = []
+        partido_elegido = st.selectbox("Seleccioná el partido:", lista_nombres)
         
-        for index, row in df_partidos.iterrows():
-            with st.container():
-                col1, col2, col3, col4, col5 = st.columns([3, 1, 0.5, 1, 3])
-                
-                with col1: st.write(f"### {row['equipo_local']}")
-                with col2: g_l = st.number_input("", min_value=0, step=1, key=f"l_{row['id']}", label_visibility="collapsed")
-                with col3: st.write("## -")
-                with col4: g_v = st.number_input("", min_value=0, step=1, key=f"v_{row['id']}", label_visibility="collapsed")
-                with col5: st.write(f"### {row['equipo_visitante']}")
-                
-                pronosticos_lista.append({
-                    "usuario": usuario,
-                    "id_partido": int(row['id']),
-                    "goles_l": int(g_l),
-                    "goles_v": int(g_v)
-                })
-            st.divider()
+        # Obtenemos el ID real del partido seleccionado
+        idx = lista_nombres.tolist().index(partido_elegido)
+        id_partido = df_partidos.iloc[idx]['id']
+        
+        col1, col2 = st.columns(2)
+        with col1:
+            goles_l = st.number_input("Goles Local", min_value=0, step=1, key="l")
+        with col2:
+            goles_v = st.number_input("Goles Visitante", min_value=0, step=1, key="v")
+            
+        if st.button("Enviar Pronóstico"):
+            if usuario:
+                exito = guardar_pronostico(usuario, id_partido, goles_l, goles_v)
+                if exito:
+                    st.success(f"✅ ¡Listo {usuario}! Cargado el {goles_l}-{goles_v} para el partido {id_partido}.")
+            else:
+                st.warning("Poné tu nombre antes de enviar, boludo.")
+    except:
+        st.error("No pude leer la pestaña 'Partidos'. Revisá el nombre en el Excel.")
 
-        if st.button("🚀 GUARDAR TODOS MIS PRONÓSTICOS"):
-            with st.spinner("Enviando datos al Excel..."):
-                try:
-                    response = requests.post(SCRIPT_URL, data=json.dumps(pronosticos_lista))
-                    if "Éxito" in response.text:
-                        st.success("¡Golazo! Se guardaron todos los resultados.")
-                        st.balloons()
-                    else:
-                        st.error(f"Error del servidor: {response.text}")
-                except Exception as e:
-                    st.error(f"Error de conexión: {e}")
-
-except Exception as e:
-    st.error(f"Error al conectar con el fixture: {e}")
+# --- PESTAÑA 2: RANKING ---
+with tab_ranking:
+    st.header("🏆 Posiciones en Tiempo Real")
+    
+    # URL de la pestaña de cálculos donde hicimos las fórmulas
+    url_ranking = f"https://docs.google.com/spreadsheets/d/{SHEET_ID}/gviz/tq?tqx=out:csv&sheet=CalculoPuntos"
+    
+    try:
+        df_ranking = pd.read_csv(url_ranking)
+        
+        # Agrupamos por usuario y sumamos los puntos
+        # Asegurate que en tu Excel la columna se llame 'Usuario' y la otra 'Puntos'
+        resumen = df_ranking.groupby("Usuario")["Puntos"].sum().reset_index()
+        resumen = resumen.sort_values(by="Puntos", ascending=False).reset_index(drop=True)
+        
+        # Mostramos el Ranking
+        st.dataframe(resumen, use_container_width=True)
+        
+        if not resumen.empty:
+            puntero = resumen.iloc[0]['Usuario']
+            st.balloons() if st
