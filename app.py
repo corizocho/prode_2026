@@ -18,16 +18,15 @@ t1, t2 = st.tabs(["⚽ Pronósticos", "📊 Posiciones"])
 with t1:
     st.header("Cargá tu jugada")
     try:
-        # Leemos los partidos
-        df_p = pd.read_csv(URL_PARTIDOS)
-        
-        # Limpieza rápida por si Google mete columnas vacías
-        df_p = df_p.dropna(subset=['equipo_local', 'equipo_visitante'])
-        
-        nombre = st.text_input("Tu Nombre:", placeholder="Escribí tu nombre acá")
-        
-        opciones = df_p['equipo_local'] + " vs " + df_p['equipo_visitante']
-        sel = st.selectbox("Elegí el partido:", opciones)
+    df_p = pd.read_csv(URL_PARTIDOS)
+    # Esto limpia espacios en los nombres de las columnas automáticamente
+    df_p.columns = df_p.columns.str.strip() 
+    
+    nombre = st.text_input("Tu Nombre:")
+    
+    # Armamos la lista
+    opciones = df_p['equipo_local'] + " vs " + df_p['equipo_visitante']
+    sel = st.selectbox("Elegí el partido:", opciones)
         
         st.divider()
         st.info("🎯 Para anotar tus goles, hacelo directamente en el Excel mientras terminamos la conexión del botón.")
