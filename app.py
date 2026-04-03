@@ -2,12 +2,21 @@ import streamlit as st
 import pandas as pd
 
 # 1. PEGA ACÁ LA URL DE TU EXCEL (La que ves en el navegador)
-URL_EXCEL = "https://docs.google.com/spreadsheets/d/1BACdwjatwM85mpPkSAOXY8l3IP-MecfjgYqa7USZw10/edit?gid=883227529#gid=883227529"
+URL_EXCEL = "https://docs.google.com/spreadsheets/d/1BACdwjatWM8mpPKSAOXY8I3IP-MecfJgyqa7OSZWTO/edit""
 
 # Función para convertir la URL normal en una de descarga de datos
-def obtener_url_csv(sheet_name):
-    base_url = URL_EXCEL.replace("/edit", "")
-    return f"{base_url}/gviz/tq?tqx=out:csv&sheet={sheet_name}"
+def obtener_url_csv(sheet_id, sheet_name):
+    # Esta es la forma infalible de pedir una pestaña específica como CSV
+    return f"https://docs.google.com/spreadsheets/d/{sheet_id}/gspread/tq?tqx=out:csv&sheet={sheet_name}"
+
+# Y cuando llames a los datos, usalo así:
+ID_SHEET = "1BACdwjatWM8mpPKSAOXY8I3IP-MecfJgyqa7OSZWTO"
+
+try:
+    df_partidos = pd.read_csv(obtener_url_csv(ID_SHEET, "Partidos"))
+    # ... resto del código ...
+except Exception as e:
+    st.error(f"Error al leer: {e}")
 
 st.title("🏆 PRODE MUNDIAL 2026")
 
