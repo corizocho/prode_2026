@@ -9,16 +9,35 @@ ID_SHEET = "1BACdwjatWM8mpPKSAOXY8I3IP-MecfJgyqa7OSZWTO"
 
 def conectar_google():
     try:
-        # Esto busca la sección [gcp_service_account] en tus Secrets
-        info_llave = st.secrets["gcp_service_account"]
+        # Traemos la info de los Secrets
+        secret_info = st.secrets["gcp_service_account"]
+        
+        # LIMPIEZA CRÍTICA: Esto arregla la llave si tiene errores de formato
+        # Reemplaza los saltos de línea literales por los que entiende Python
+        limpiar_llave = secret_info["private_key"].replace("\\n", "\n")
+        
+        # Armamos el diccionario de credenciales nuevo
+        creds_dict = {
+            "type": secret_info["type"],
+            "project_id": secret_info["project_id"],
+            "private_key_id": secret_info["private_key_id"],
+            "private_key": limpiar_llave,
+            "client_email": secret_info["client_email"],
+            "client_id": secret_info["client_id"],
+            "auth_uri": secret_info["auth_uri"],
+            "token_uri": secret_info["token_uri"],
+            "auth_provider_x509_cert_url": secret_info["auth_provider_x509_cert_url"],
+            "client_x509_cert_url": secret_info["client_x509_cert_url"]
+        }
+        
         scope = ["https://spreadsheets.google.com/feeds", "https://www.googleapis.com/auth/drive"]
-        creds = ServiceAccountCredentials.from_json_keyfile_dict(info_llave, scope)
+        creds = ServiceAccountCredentials.from_json_keyfile_dict(creds_dict, scope)
         return gspread.authorize(creds)
     except Exception as e:
-        st.error(f"Error en los Secrets: {e}")
+        st.error(f"Error detectado en los Secrets: {e}")
         st.stop()
 
-# --- APP ---
+# --- INICIO DE LA APLICACIÓN ---
 try:
     client = conectar_google()
     spreadsheet = client.open_by_key(ID_SHEET)
@@ -45,22 +64,23 @@ try:
             if nombre:
                 ws_res = spreadsheet.worksheet("Respuestas de formulario 1")
                 ws_res.append_row([pd.Timestamp.now().strftime('%d/%m/%Y %H:%M'), nombre, id_partido, g_l, g_v])
-                st.success("✅ ¡Guardado!")
+                st.success("✅ ¡Guardado! Ya podés cerrar.")
                 st.balloons()
             else:
-                st.warning("Poné tu nombre.")
+                st.warning("Escribí tu nombre.")
 
     with t2:
         st.header("🏆 Posiciones")
         try:
             ws_rank = spreadsheet.worksheet("CalculoPuntos")
             df_r = pd.DataFrame(ws_rank.get_all_records())
-            df_r = df_r.dropna(subset=['Usuario', 'Puntos'])
+            # Filtramos por si hay filas vacías
+            df_r = df_r[df_r['Usuario'] != ""]
             res = df_r.groupby("Usuario")["Puntos"].sum().reset_index()
-            st.table(res.sort_values("Puntos", ascending=False))
+            st.table(res.sort_values("Puntos", ascending=False).reset_index(drop=True))
         except:
-            st.info("No hay puntos cargados aún.")
+            st.info("Cargando ranking...")
 
 except Exception as e:
-    st.error("Error de conexión con Google.")
-    st.info("Revisá que el mail de tu JSON sea Editor en el Excel.")
+    st.error("Error de conexión final.")
+    st.write(f"Detalle: {e}")
