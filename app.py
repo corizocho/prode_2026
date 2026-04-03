@@ -25,7 +25,7 @@ def conectar_google():
 try:
     client = conectar_google()
     # Usamos la variable ID_SHEET que definimos arriba con comillas
-    spreadsheet = client.open_by_key(ID_SHEET)
+    spreadsheet = client.open_by_key("1BACdwjatWM8mpPKSAOXY8I3IP-MecfJgyqa7OSZWTO")
     
     st.title("🏆 PRODE MUNDIAL 2026")
 
