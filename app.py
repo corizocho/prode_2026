@@ -5,7 +5,7 @@ from oauth2client.service_account import ServiceAccountCredentials
 
 # --- CONFIGURACIÓN DE PÁGINA ---
 st.set_page_config(page_title="Prode Mundial 2026", layout="centered")
-ID_SHEET = "1BACdwjatWM8mpPKSAOXY8I3IP-MecfJgyqa7OSZWTO"
+ID_SHEET = "1BACdwjatwM85mpPkSAOXY8l3IP-MecfjgYqa7USZw10"
 
 def conectar_google():
     try:
